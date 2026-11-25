@@ -6,49 +6,59 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Question Bank</title>
 <style>
-:root{--bg:#f6f4ef;--card:#fff;--ink:#1d2a2a;--mute:#6b7776;--line:#dcd8cd;--acc:#1f5f5b;--easy:#3d8b5f;--hard:#c98a1a;--hardest:#b3392f}
-@media(prefers-color-scheme:dark){:root{--bg:#141a1a;--card:#1d2626;--ink:#e8efee;--mute:#8fa09e;--line:#2d3b3a;--acc:#5bb5ad}}
+:root{--bg:#fafafa;--card:#fff;--ink:#0a0a0a;--mute:#767676;--line:#e3e3e3;--acc:#0a0a0a;--on:#fff;--easy:#bdbdbd;--hard:#737373;--hardest:#0a0a0a;--sans:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Inter,Arial,sans-serif;--serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif}
+@media(prefers-color-scheme:dark){:root{--bg:#0a0a0a;--card:#131313;--ink:#f5f5f5;--mute:#8a8a8a;--line:#262626;--acc:#f5f5f5;--on:#0a0a0a;--easy:#555;--hard:#9a9a9a;--hardest:#fff}}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0}
-body{background:var(--bg);color:var(--ink);font:16px/1.5 Georgia,"Iowan Old Style",serif;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
-.wrap{max-width:760px;margin:0 auto;padding:16px}
-h1{font-size:28px;margin:8px 0 16px}
-h2{font-size:22px;margin:0}
+body{background:var(--bg);color:var(--ink);font:17px/1.55 var(--serif);-webkit-font-smoothing:antialiased;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+.wrap{max-width:720px;margin:0 auto;padding:28px 20px 120px}
+h1{font-size:40px;font-weight:400;letter-spacing:-.03em;line-height:1.1;margin:12px 0 22px}
+h2{font-size:26px;font-weight:400;letter-spacing:-.02em;margin:0}
 button,input,textarea{font:inherit;color:inherit}
-button{background:var(--acc);color:#fff;border:0;border-radius:10px;padding:10px 16px;cursor:pointer}
-button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
-button.sm{padding:6px 10px;font-size:14px}
-button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
-input[type=text],input[type=password],textarea{width:100%;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px}
-.row{display:flex;gap:8px;align-items:center}
+button{font-family:var(--sans);font-size:14px;font-weight:500;letter-spacing:.02em;background:var(--acc);color:var(--on);border:1px solid var(--acc);border-radius:999px;padding:11px 20px;cursor:pointer;transition:opacity .15s,background .15s,color .15s,border-color .15s}
+button:hover{opacity:.85}
+button.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+button.ghost:hover{opacity:1;border-color:var(--ink)}
+button.sm{padding:7px 14px;font-size:12.5px}
+button.bad{border-style:dashed;border-color:var(--ink)}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+input[type=text],input[type=password],textarea{width:100%;background:transparent;border:0;border-bottom:1px solid var(--ink);border-radius:0;padding:12px 2px;font-size:17px}
+textarea{border:1px solid var(--line);border-radius:14px;padding:14px;background:var(--card)}
+input::placeholder,textarea::placeholder{color:var(--mute)}
+input[type=checkbox]{accent-color:var(--ink)}
+.row{display:flex;gap:10px;align-items:center}
 .sp{flex:1}
-.subj{display:flex;justify-content:space-between;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:8px 0;cursor:pointer}
-.subj small{color:var(--mute)}
-.tabs{display:flex;gap:6px;margin:14px 0;border-bottom:1px solid var(--line)}
-.tab{background:none;color:var(--mute);border-radius:0;border-bottom:3px solid transparent;padding:10px 14px}
-.tab.on{color:var(--ink);border-bottom-color:var(--c)}
-.q{display:flex;gap:12px;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--c);border-radius:10px;padding:12px;margin:10px 0}
-.n{font-weight:bold;min-width:2ch;color:var(--mute)}
+.subj{display:flex;justify-content:space-between;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 20px;margin:12px 0;cursor:pointer;transition:border-color .15s,transform .15s}
+.subj:hover{border-color:var(--ink)}
+.subj b{font-weight:400;font-size:21px;letter-spacing:-.01em}
+.subj small{color:var(--mute);font:12px var(--sans);letter-spacing:.06em;text-transform:uppercase}
+.tabs{display:flex;gap:4px;margin:22px 0 14px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tab{background:none;color:var(--mute);border:0;border-radius:0;border-bottom:2px solid transparent;margin-bottom:-1px;padding:12px 14px;font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap}
+.tab:hover{opacity:1;color:var(--ink)}
+.tab.on{color:var(--ink);border-bottom-color:var(--ink)}
+.dt{letter-spacing:1px;font-size:8px;margin-right:7px;vertical-align:2px}
+.q{display:flex;gap:14px;background:var(--card);border:1px solid var(--line);border-left:5px solid var(--c);border-radius:14px;padding:16px;margin:12px 0}
+.n{font:13px var(--sans);letter-spacing:.06em;min-width:2.2ch;color:var(--mute);padding-top:3px}
 .qb{flex:1;min-width:0}
-.qb img{max-width:100%;background:#fff;border-radius:6px;display:block}
+.qb img{max-width:100%;background:#fff;border-radius:8px;display:block;border:1px solid var(--line)}
 .qb p{margin:0;white-space:pre-wrap;word-wrap:break-word}
-.d{color:var(--mute);font-size:13px;margin-top:6px}
-.stl{color:var(--mute);font-size:13px;margin:0 0 8px;min-height:1.5em}
-.stl.err{color:var(--hardest)}
-.f{display:block;margin:12px 0;font-size:14px;color:var(--mute)}
-.f input{margin-top:4px;color:var(--ink)}
-.help{font-size:14px;color:var(--mute);margin:8px 0}
-.empty{color:var(--mute);text-align:center;padding:32px 0}
-.fab{position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom));border-radius:28px;padding:14px 22px;box-shadow:0 4px 14px #0004}
-.ov{position:fixed;inset:0;background:#000a;display:none;z-index:9}
+.d{color:var(--mute);font:11.5px var(--sans);letter-spacing:.06em;text-transform:uppercase;margin-top:10px}
+.stl{color:var(--mute);font:13px var(--sans);margin:0 0 10px;min-height:1.5em}
+.stl.err{color:var(--ink);text-decoration:underline dashed;text-underline-offset:3px}
+.f{display:block;margin:16px 0;font:11.5px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.f input{margin-top:2px;color:var(--ink);text-transform:none;letter-spacing:0}
+.help{font:13.5px/1.5 var(--sans);color:var(--mute);margin:10px 0}
+.empty{color:var(--mute);text-align:center;padding:56px 0;font-style:italic}
+.fab{position:fixed;right:22px;bottom:calc(22px + env(safe-area-inset-bottom));padding:15px 26px;box-shadow:0 10px 30px rgba(0,0,0,.28)}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.55);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);display:none;z-index:9}
 .ov.on{display:flex;align-items:flex-end;justify-content:center}
-.sheet{background:var(--bg);width:100%;max-width:900px;border-radius:16px 16px 0 0;padding:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom));max-height:95vh;overflow:auto}
-#cv{width:100%;height:55vh;background:#fff;border:1px solid var(--line);border-radius:10px;touch-action:none;display:block}
-.tools{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;align-items:center}
-.tools label{font-size:14px;color:var(--mute)}
-.sw{width:28px;height:28px;border-radius:50%;padding:0;border:2px solid var(--line)}
-.sw.on{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc)}
-@media(prefers-reduced-motion:no-preference){.sheet{animation:up .2s}@keyframes up{from{transform:translateY(30px);opacity:.5}}}
+.sheet{background:var(--bg);color:var(--ink);width:100%;max-width:900px;border-radius:24px 24px 0 0;border:1px solid var(--line);border-bottom:0;padding:22px;padding-bottom:calc(22px + env(safe-area-inset-bottom));max-height:95vh;overflow:auto}
+#cv{width:100%;height:55vh;background:#fff;border:1px solid var(--line);border-radius:14px;touch-action:none;display:block}
+.tools{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;align-items:center}
+.tools label{font:13px var(--sans);color:var(--mute)}
+.sw{width:28px;height:28px;border-radius:50%;padding:0;border:1px solid var(--line)}
+.sw.on{box-shadow:0 0 0 2px var(--bg),0 0 0 3px var(--ink)}
+@media(prefers-reduced-motion:no-preference){.sheet{animation:up .25s ease-out}@keyframes up{from{transform:translateY(30px);opacity:.5}}}
 </style>
 </head>
 <body>
@@ -58,6 +68,7 @@ input[type=text],input[type=password],textarea{width:100%;background:var(--card)
 
 <script>
 const LV=[['easy','Easy'],['hard','Hard'],['hardest','Hardest']];
+const DOT={easy:'\u25CF\u25CB\u25CB',hard:'\u25CF\u25CF\u25CB',hardest:'\u25CF\u25CF\u25CF'};
 const COL={easy:'var(--easy)',hard:'var(--hard)',hardest:'var(--hardest)'};
 let S={subjects:[],tomb:{}},cur=null,lvl='hard';
 
@@ -166,9 +177,12 @@ function schedulePush(){if(!CFG)return;clearTimeout(pushT);pushT=setTimeout(sync
 function setSt(t,err){st={t,err:!!err};updateStatus()}
 function updateStatus(){
   const e=$('sm');
-  if(e){e.textContent=CFG?st.t:'Sync is off. Tap \u201cSet up sync\u201d to back up to GitHub.';e.className='stl'+(st.err?' err':'')}
+  if(e){e.textContent=syncing?'Syncing\u2026':(st.t||'');e.className='stl'+(st.err?' err':'')}
   const b=$('sy');
-  if(b)b.textContent=syncing?'Syncing\u2026':CFG?'Sync':'Set up sync';
+  if(b){
+    b.textContent=!CFG?'Set up sync':syncing?'Syncing\u2026':st.err?'Sync failed':'Synced';
+    b.className='ghost sm'+(CFG&&st.err&&!syncing?' bad':'');
+  }
 }
 function afterSync(){
   if(cur&&!S.subjects.some(x=>x.id===cur))cur=null;
@@ -178,7 +192,8 @@ function renderKeep(){const n=$('ns'),v=n?n.value:'';render();if(v&&$('ns'))$('n
 
 function openSettings(){
   const c=CFG||{repo:'',branch:'main',path:'question-bank.json',token:''};
-  $('sheet').innerHTML=`<div class="row"><h2>GitHub sync</h2><span class="sp"></span><button class="ghost sm" id="x">Cancel</button></div>
+  $('sheet').innerHTML=`<div class="row"><h2>GitHub sync</h2><span class="sp"></span><button class="ghost sm" id="x">Close</button></div>
+  <div class="stl" id="sm" role="status" style="margin-top:8px"></div>${CFG?'<button id="sn" class="ghost" style="margin-bottom:4px">Sync now</button>':''}
   <p class="help">Your bank is stored as one JSON file in a GitHub repo you own. Use a <b>private</b> repo and a fine-grained token limited to that repo with <b>Contents: Read and write</b>. The token is saved on this device only. Enter the same details on each device.</p>
   <label class="f">Repository<input type="text" id="gr" placeholder="owner/repo" value="${esc(c.repo)}" autocapitalize="none" autocomplete="off" spellcheck="false"></label>
   <label class="f">Branch<input type="text" id="gb" value="${esc(c.branch)}" autocapitalize="none" autocomplete="off" spellcheck="false"></label>
@@ -187,6 +202,8 @@ function openSettings(){
   <div class="row" style="margin-top:16px">${CFG?'<button class="ghost" id="dc">Disconnect</button>':''}<span class="sp"></span><button id="go">Save &amp; sync</button></div>`;
   $('ov').classList.add('on');
   $('x').onclick=closeSheet;
+  if($('sn'))$('sn').onclick=sync;
+  updateStatus();
   if($('dc'))$('dc').onclick=async()=>{
     if(!confirm('Disconnect sync on this device? Your local questions and the GitHub file are kept.'))return;
     CFG=null;clearTimeout(pushT);await kvDel('cfg');st={t:'',err:false};closeSheet();render();
@@ -208,14 +225,12 @@ function render(){
   const a=$('app');
   if(!cur){
     a.innerHTML=`<div class="row"><h1 class="sp">Question Bank</h1><button class="ghost sm" id="sy"></button></div>
-    <div class="stl" id="sm" role="status"></div>
     <div class="row"><input type="text" id="ns" placeholder="New subject name" aria-label="New subject name"><button id="addS">Add subject</button></div>
     <div id="sl">${S.subjects.length?S.subjects.map(s=>`<div class="subj" data-id="${s.id}"><div><b>${esc(s.name)}</b><br><small>${LV.map(([k,l])=>l+' '+s.q[k].length).join(' · ')}</small></div><button class="ghost sm" data-del="${s.id}">Delete</button></div>`).join(''):'<div class="empty">Add your first subject to start collecting questions.</div>'}</div>
-    <div class="row" style="margin-top:24px;flex-wrap:wrap"><button class="ghost sm" id="gs">Sync settings</button><button class="ghost sm" id="exp">Export backup</button><label class="ghost sm" style="border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:14px;cursor:pointer">Import backup<input type="file" id="imp" accept=".json" hidden></label></div>`;
+    <div class="row" style="margin-top:24px;flex-wrap:wrap"><button class="ghost sm" id="exp">Export backup</button><label class="ghost sm" style="border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:14px;cursor:pointer">Import backup<input type="file" id="imp" accept=".json" hidden></label></div>`;
     $('addS').onclick=addSubject;
     $('ns').onkeydown=e=>{if(e.key==='Enter')addSubject()};
-    $('sy').onclick=()=>CFG?sync():openSettings();
-    $('gs').onclick=openSettings;
+    $('sy').onclick=openSettings;
     a.querySelectorAll('.subj').forEach(el=>el.onclick=e=>{
       if(e.target.dataset.del){if(confirm('Delete this subject and all its questions?')){S.tomb[e.target.dataset.del]=Date.now();S.subjects=S.subjects.filter(s=>s.id!==e.target.dataset.del);save();render()}return}
       cur=el.dataset.id;render()});
@@ -226,12 +241,11 @@ function render(){
   }
   const s=S.subjects.find(x=>x.id===cur),list=s.q[lvl],c=COL[lvl];
   a.innerHTML=`<div class="row"><button class="ghost sm" id="back">Back</button><h2 class="sp">${esc(s.name)}</h2><button class="ghost sm" id="sy"></button></div>
-  <div class="stl" id="sm" role="status" style="margin-top:6px"></div>
-  <div class="tabs" style="--c:${c}">${LV.map(([k,l])=>`<button class="tab ${k===lvl?'on':''}" style="--c:${COL[k]}" data-l="${k}">${l} (${s.q[k].length})</button>`).join('')}</div>
+  <div class="tabs" style="--c:${c}">${LV.map(([k,l])=>`<button class="tab ${k===lvl?'on':''}" style="--c:${COL[k]}" data-l="${k}"><span class="dt">${DOT[k]}</span>${l} (${s.q[k].length})</button>`).join('')}</div>
   <div style="--c:${c}">${list.length?list.map((q,i)=>`<div class="q"><div class="n">${i+1}.</div><div class="qb">${q.img?`<img src="${q.img}" alt="Handwritten question ${i+1}">`:`<p>${esc(q.text)}</p>`}<div class="d">Added ${fmt(q.ts)}</div></div><button class="ghost sm" data-rm="${q.id}" aria-label="Delete question ${i+1}">Delete</button></div>`).join(''):'<div class="empty">No questions here yet.</div>'}</div>
   <button class="fab" id="add">+ Add question</button>`;
   $('back').onclick=()=>{cur=null;render()};
-  $('sy').onclick=()=>CFG?sync():openSettings();
+  $('sy').onclick=openSettings;
   a.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{lvl=b.dataset.l;render()});
   a.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{if(confirm('Delete this question?')){S.tomb[b.dataset.rm]=Date.now();s.q[lvl]=s.q[lvl].filter(q=>q.id!==b.dataset.rm);save();render()}});
   $('add').onclick=openAdd;
@@ -272,7 +286,7 @@ function writeMode(){
   mode('w');strokes=[];erase=false;color='#111111';
   $('body').innerHTML=`<canvas id="cv"></canvas>
   <div class="tools">
-    ${['#111111','#1a4fd6','#c0262d'].map(c=>`<button class="sw ${c===color?'on':''}" style="background:${c}" data-c="${c}" aria-label="Pen color ${c}"></button>`).join('')}
+    ${['#111111','#6b6b6b','#b0b0b0'].map(c=>`<button class="sw ${c===color?'on':''}" style="background:${c}" data-c="${c}" aria-label="Pen color ${c}"></button>`).join('')}
     <button class="ghost sm" id="er">Eraser</button>
     <button class="ghost sm" id="un">Undo</button>
     <button class="ghost sm" id="cl">Clear</button>
