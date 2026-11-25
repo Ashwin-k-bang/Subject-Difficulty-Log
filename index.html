@@ -107,7 +107,7 @@ async function ghErr(r){
   return new Error(h||('GitHub error '+r.status+': '+m));
 }
 async function pull(){
-  const q='?ref='+encodeURIComponent(CFG.branch);
+  const q=CFG.branch?'?ref='+encodeURIComponent(CFG.branch):'';
   const r=await api(q);
   if(r.status===404)return{sha:null,data:null};
   if(!r.ok)throw await ghErr(r);
@@ -119,7 +119,8 @@ async function pull(){
   return{sha:j.sha,data};
 }
 function put(sha){
-  const body={message:'Sync question bank',content:b64enc(JSON.stringify(S)),branch:CFG.branch};
+  const body={message:'Sync question bank',content:b64enc(JSON.stringify(S))};
+  if(CFG.branch)body.branch=CFG.branch;
   if(sha)body.sha=sha;
   return api('',{method:'PUT',headers:{'Content-Type':'application/json',Accept:'application/vnd.github+json'},body:JSON.stringify(body)});
 }
@@ -177,7 +178,7 @@ function schedulePush(){if(!CFG)return;clearTimeout(pushT);pushT=setTimeout(sync
 function setSt(t,err){st={t,err:!!err};updateStatus()}
 function updateStatus(){
   const e=$('sm');
-  if(e){e.textContent=syncing?'Syncing\u2026':(st.t||'');e.className='stl'+(st.err?' err':'')}
+  if(e){e.textContent=syncing?'Syncing\u2026':(st.err?st.t:(CFG?'Connected. Your data is saved to GitHub.':''));e.className='stl'+(st.err?' err':'')}
   const b=$('sy');
   if(b){
     b.textContent=!CFG?'Set up sync':syncing?'Syncing\u2026':st.err?'Sync failed':'Synced';
@@ -191,31 +192,38 @@ function afterSync(){
 function renderKeep(){const n=$('ns'),v=n?n.value:'';render();if(v&&$('ns'))$('ns').value=v}
 
 function openSettings(){
-  const c=CFG||{repo:'',branch:'main',path:'question-bank.json',token:''};
-  $('sheet').innerHTML=`<div class="row"><h2>GitHub sync</h2><span class="sp"></span><button class="ghost sm" id="x">Close</button></div>
-  <div class="stl" id="sm" role="status" style="margin-top:8px"></div>${CFG?'<button id="sn" class="ghost" style="margin-bottom:4px">Sync now</button>':''}
-  <p class="help">Your bank is stored as one JSON file in a GitHub repo you own. Use a <b>private</b> repo and a fine-grained token limited to that repo with <b>Contents: Read and write</b>. The token is saved on this device only. Enter the same details on each device.</p>
-  <label class="f">Repository<input type="text" id="gr" placeholder="owner/repo" value="${esc(c.repo)}" autocapitalize="none" autocomplete="off" spellcheck="false"></label>
-  <label class="f">Branch<input type="text" id="gb" value="${esc(c.branch)}" autocapitalize="none" autocomplete="off" spellcheck="false"></label>
-  <label class="f">File path<input type="text" id="gp" value="${esc(c.path)}" autocapitalize="none" autocomplete="off" spellcheck="false"></label>
-  <label class="f">Access token<input type="password" id="gt" placeholder="${CFG?'Saved \u2014 leave blank to keep':'github_pat_\u2026'}" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
-  <div class="row" style="margin-top:16px">${CFG?'<button class="ghost" id="dc">Disconnect</button>':''}<span class="sp"></span><button id="go">Save &amp; sync</button></div>`;
+  const c=CFG||{repo:'Ashwin-k-bang/Subject-Difficulty-Log',branch:'',path:'data/question-bank.json',token:''};
+  const [ou,on]=(c.repo||'/').split('/');
+  const P=CFG?'Saved \u2014 leave blank to keep':'github_pat_\u2026';
+  $('sheet').innerHTML=`<h2>Sync across devices</h2>
+  <p class="help">Your question bank is saved in this GitHub repo (<code>${esc(c.path)}</code>), so every device shows the same data. Each device needs the token once.</p>
+  <label class="f">GitHub username<input type="text" id="gu" value="${esc(ou||'')}" autocapitalize="none" autocomplete="off" spellcheck="false"></label>
+  <label class="f">Repository name<input type="text" id="gr" value="${esc(on||'')}" autocapitalize="none" autocomplete="off" spellcheck="false"></label>
+  <label class="f">Branch (leave empty for the default)<input type="text" id="gb" value="${esc(c.branch||'')}" autocapitalize="none" autocomplete="off" spellcheck="false"></label>
+  <label class="f">Access token<input type="password" id="gt" placeholder="${P}" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+  <ol class="help" style="padding-left:20px;margin:0">
+    <li>Open <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a></li>
+    <li>Repository access: <b>Only select repositories</b>, pick this repo</li>
+    <li>Permissions \u2192 Repository \u2192 <b>Contents: Read and write</b></li>
+    <li>Generate, copy, paste above</li>
+  </ol>
+  <div class="stl" id="sm" role="status" style="margin-top:12px"></div>
+  <div class="row" style="margin-top:8px">${CFG?'<button class="ghost" id="dc">Remove token</button>':''}<button class="ghost" id="x">Close</button><button id="go">Save &amp; sync</button></div>`;
   $('ov').classList.add('on');
   $('x').onclick=closeSheet;
-  if($('sn'))$('sn').onclick=sync;
   updateStatus();
   if($('dc'))$('dc').onclick=async()=>{
-    if(!confirm('Disconnect sync on this device? Your local questions and the GitHub file are kept.'))return;
+    if(!confirm('Remove the token and stop syncing on this device? Your local questions and the GitHub file are kept.'))return;
     CFG=null;clearTimeout(pushT);await kvDel('cfg');st={t:'',err:false};closeSheet();render();
   };
   $('go').onclick=async()=>{
-    let repo=$('gr').value.trim().replace(/^https?:\/\/github\.com\//i,'').replace(/\.git$/i,'').replace(/\/+$/,'');
-    const branch=$('gb').value.trim()||'main';
-    const path=($('gp').value.trim()||'question-bank.json').replace(/^\/+/,'');
+    const user=$('gu').value.trim().replace(/^@/,''),name=$('gr').value.trim().replace(/\.git$/i,'');
+    const repo=user+'/'+name;
+    const branch=$('gb').value.trim();
     const token=$('gt').value.trim()||(CFG&&CFG.token)||'';
-    if(!/^[\w.-]+\/[\w.-]+$/.test(repo)){alert('Enter the repository as owner/name.');return}
+    if(!/^[\w.-]+\/[\w.-]+$/.test(repo)){alert('Enter your GitHub username and the repository name.');return}
     if(!token){alert('Paste your GitHub access token.');return}
-    CFG={repo,branch,path,token,last:CFG&&CFG.last};
+    CFG={repo,branch,path:c.path,token,last:CFG&&CFG.last};
     await saveCfg();closeSheet();render();sync();
   };
 }
