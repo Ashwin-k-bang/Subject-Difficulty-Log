@@ -36,6 +36,8 @@ input[type=checkbox]{accent-color:var(--ink)}
 .tab{background:none;color:var(--mute);border:0;border-radius:0;border-bottom:2px solid transparent;margin-bottom:-1px;padding:12px 14px;font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap}
 .tab:hover{opacity:1;color:var(--ink)}
 .tab.on{color:var(--ink);border-bottom-color:var(--ink)}
+.tab.add{font-style:italic;text-transform:none;letter-spacing:.02em}
+.qa{display:flex;flex-direction:column;gap:8px;align-self:flex-start}
 .dt{letter-spacing:1px;font-size:8px;margin-right:7px;vertical-align:2px}
 .q{display:flex;gap:14px;background:var(--card);border:1px solid var(--line);border-left:5px solid var(--c);border-radius:14px;padding:16px;margin:12px 0}
 .n{font:13px var(--sans);letter-spacing:.06em;min-width:2.2ch;color:var(--mute);padding-top:3px}
@@ -67,10 +69,33 @@ input[type=checkbox]{accent-color:var(--ink)}
 <div class="ov" id="ov"><div class="sheet" id="sheet"></div></div>
 
 <script>
-const LV=[['easy','Easy'],['hard','Hard'],['hardest','Hardest']];
+const DEF=[['easy','Easy'],['hard','Hard'],['hardest','Hardest']];
 const DOT={easy:'\u25CF\u25CB\u25CB',hard:'\u25CF\u25CF\u25CB',hardest:'\u25CF\u25CF\u25CF'};
 const COL={easy:'var(--easy)',hard:'var(--hard)',hardest:'var(--hardest)'};
-let S={subjects:[],tomb:{}},cur=null,lvl='hard';
+let S={subjects:[],tomb:{}},cur=null,curT=null,lvl='hard',editing=null;
+const tcol=t=>COL[t.id]||'var(--hard)';
+const tabsOf=t=>[...t.tabs].sort((a,b)=>a.ord-b.ord);
+const cs=()=>S.subjects.find(x=>x.id===cur);
+const ct=()=>{const s=cs();return s&&s.topics.find(x=>x.id===curT)};
+function fix(){
+  if(cur&&!cs())cur=null;
+  if(!cur)curT=null;else if(curT&&!ct())curT=null;
+}
+/* A subject holds topics; each topic holds tabs and the questions in them. */
+function normTopic(t){
+  if(!t.tabs)t.tabs=DEF.map(([id,name],i)=>({id,name,ord:i,mod:0}));
+  t.q=t.q||{};t.mod=t.mod||0;t.ord=t.ord||0;
+  t.tabs.forEach(x=>{if(!t.q[x.id])t.q[x.id]=[]});
+  return t;
+}
+function norm(s){
+  s.mod=s.mod||0;
+  if(!s.topics)s.topics=(s.tabs||s.q)?[{id:'gen-'+s.id,name:'General',ord:0,mod:0,tabs:s.tabs,q:s.q}]:[];
+  delete s.tabs;delete s.q;
+  s.topics=s.topics.map(normTopic);
+  return s;
+}
+function normAll(d){d.subjects=(d.subjects||[]).map(norm);d.tomb=d.tomb||{};return d}
 
 /* ---------- storage (IndexedDB) ---------- */
 const idb=new Promise((res,rej)=>{const r=indexedDB.open('qbank',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=rej});
@@ -124,6 +149,23 @@ function put(sha){
   if(sha)body.sha=sha;
   return api('',{method:'PUT',headers:{'Content-Type':'application/json',Accept:'application/vnd.github+json'},body:JSON.stringify(body)});
 }
+const newer=(x,y)=>(y.mod||0)>(x.mod||0);
+function mergeBox(m,s,tomb){
+  for(const t of s.tabs||[]){
+    if(tomb[m.id+'/'+t.id])continue;
+    const e=m.tabs.find(x=>x.id===t.id);
+    if(!e)m.tabs.push({...t});else if(newer(e,t))Object.assign(e,t);
+  }
+  for(const k in (s.q||{})){
+    if(tomb[m.id+'/'+k])continue;
+    const arr=m.q[k]=m.q[k]||[];
+    for(const q of s.q[k]){
+      if(tomb[q.id])continue;
+      const i=arr.findIndex(x=>x.id===q.id);
+      if(i<0)arr.push(q);else if(newer(arr[i],q))arr[i]=q;
+    }
+  }
+}
 function merge(a,b){
   const tomb={...(a.tomb||{})};
   for(const k in (b.tomb||{}))tomb[k]=Math.max(tomb[k]||0,b.tomb[k]);
@@ -131,17 +173,30 @@ function merge(a,b){
   for(const s of [...(a.subjects||[]),...(b.subjects||[])]){
     if(tomb[s.id])continue;
     let m=map.get(s.id);
-    if(!m){m={id:s.id,name:s.name,q:{easy:[],hard:[],hardest:[]}};map.set(s.id,m);out.push(m)}
-    for(const [k] of LV){
-      const seen=new Set(m.q[k].map(q=>q.id));
-      for(const q of (s.q&&s.q[k])||[])if(!seen.has(q.id)&&!tomb[q.id]){seen.add(q.id);m.q[k].push(q)}
+    if(!m){m={id:s.id,name:s.name,mod:s.mod||0,topics:[]};map.set(s.id,m);out.push(m)}
+    else if(newer(m,s)){m.name=s.name;m.mod=s.mod||0}
+    for(const t of s.topics||[]){
+      if(tomb[t.id])continue;
+      let p=m.topics.find(x=>x.id===t.id);
+      if(!p){p={id:t.id,name:t.name,ord:t.ord||0,mod:t.mod||0,tabs:[],q:{}};m.topics.push(p)}
+      else if(newer(p,t)){p.name=t.name;p.ord=t.ord||0;p.mod=t.mod||0}
+      mergeBox(p,t,tomb);
     }
   }
-  out.forEach(s=>LV.forEach(([k])=>s.q[k].sort((x,y)=>x.ts-y.ts)));
+  out.forEach(s=>s.topics.forEach(p=>{
+    p.tabs.forEach(t=>{if(!p.q[t.id])p.q[t.id]=[]});
+    for(const k of Object.keys(p.q)){
+      if(!p.tabs.some(t=>t.id===k))delete p.q[k];else p.q[k].sort((x,y)=>x.ts-y.ts);
+    }
+  }));
   return{subjects:out,tomb};
 }
+const byId=(x,y)=>x.id<y.id?-1:1;
 const canon=d=>JSON.stringify([
-  [...(d.subjects||[])].sort((x,y)=>x.id<y.id?-1:1).map(s=>[s.id,s.name,LV.map(([k])=>((s.q&&s.q[k])||[]).map(q=>q.id).sort())]),
+  [...(d.subjects||[])].sort(byId).map(s=>[s.id,s.name,s.mod||0,
+    [...(s.topics||[])].sort(byId).map(p=>[p.id,p.name,p.ord||0,p.mod||0,
+      [...(p.tabs||[])].sort(byId).map(t=>[t.id,t.name,t.ord,t.mod||0]),
+      Object.keys(p.q||{}).sort().map(k=>[k,(p.q[k]||[]).map(q=>q.id+':'+(q.mod||0)).sort()])])]),
   Object.keys(d.tomb||{}).sort()
 ]);
 
@@ -155,6 +210,7 @@ async function sync(){
     for(let n=0;n<4&&!ok;n++){
       const {sha,data}=await pull();
       if(data&&!Array.isArray(data.subjects))throw new Error('The file in the repo is not a question bank backup.');
+      if(data)normAll(data);
       const merged=merge(S,data||{subjects:[],tomb:{}});
       if(canon(merged)!==canon(S)){S=merged;changed=true;await saveLocal()}
       if(data&&canon(data)===canon(S)){ok=true;break}
@@ -186,10 +242,10 @@ function updateStatus(){
   }
 }
 function afterSync(){
-  if(cur&&!S.subjects.some(x=>x.id===cur))cur=null;
+  fix();
   if($('ov').classList.contains('on'))pendingRender=true;else renderKeep();
 }
-function renderKeep(){const n=$('ns'),v=n?n.value:'';render();if(v&&$('ns'))$('ns').value=v}
+function renderKeep(){const id=$('ns')?'ns':$('nt')?'nt':null,v=id?$(id).value:'';render();if(v&&id&&$(id))$(id).value=v}
 
 function openSettings(){
   const c=CFG||{repo:'Ashwin-k-bang/Subject-Difficulty-Log',branch:'',path:'data/question-bank.json',token:''};
@@ -234,64 +290,149 @@ function render(){
   if(!cur){
     a.innerHTML=`<div class="row"><h1 class="sp">Question Bank</h1><button class="ghost sm" id="sy"></button></div>
     <div class="row"><input type="text" id="ns" placeholder="New subject name" aria-label="New subject name"><button id="addS">Add subject</button></div>
-    <div id="sl">${S.subjects.length?S.subjects.map(s=>`<div class="subj" data-id="${s.id}"><div><b>${esc(s.name)}</b><br><small>${LV.map(([k,l])=>l+' '+s.q[k].length).join(' · ')}</small></div><button class="ghost sm" data-del="${s.id}">Delete</button></div>`).join(''):'<div class="empty">Add your first subject to start collecting questions.</div>'}</div>
+    <div id="sl">${S.subjects.length?S.subjects.map(s=>`<div class="subj" data-id="${s.id}"><div><b>${esc(s.name)}</b><br><small>${s.topics.length} topic${s.topics.length===1?'':'s'}</small></div><div class="row"><button class="ghost sm" data-ren="${s.id}">Rename</button><button class="ghost sm" data-del="${s.id}">Delete</button></div></div>`).join(''):'<div class="empty">Add your first subject to start collecting questions.</div>'}</div>
     <div class="row" style="margin-top:24px;flex-wrap:wrap"><button class="ghost sm" id="exp">Export backup</button><label class="ghost sm" style="border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:14px;cursor:pointer">Import backup<input type="file" id="imp" accept=".json" hidden></label></div>`;
     $('addS').onclick=addSubject;
     $('ns').onkeydown=e=>{if(e.key==='Enter')addSubject()};
     $('sy').onclick=openSettings;
     a.querySelectorAll('.subj').forEach(el=>el.onclick=e=>{
+      if(e.target.dataset.ren){renameSubject(e.target.dataset.ren);return}
       if(e.target.dataset.del){if(confirm('Delete this subject and all its questions?')){S.tomb[e.target.dataset.del]=Date.now();S.subjects=S.subjects.filter(s=>s.id!==e.target.dataset.del);save();render()}return}
-      cur=el.dataset.id;render()});
+      cur=el.dataset.id;curT=null;render()});
     $('exp').onclick=()=>{const b=new Blob([JSON.stringify(S)],{type:'application/json'});const u=document.createElement('a');u.href=URL.createObjectURL(b);u.download='question-bank-backup.json';u.click()};
-    $('imp').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(!Array.isArray(d.subjects))throw 0;d.tomb=d.tomb||{};S=d;await saveLocal();schedulePush();render()}catch{alert('That file is not a valid backup.')}};
+    $('imp').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(!Array.isArray(d.subjects))throw 0;d.tomb=d.tomb||{};S=normAll(d);await saveLocal();schedulePush();render()}catch{alert('That file is not a valid backup.')}};
     updateStatus();
     return;
   }
-  const s=S.subjects.find(x=>x.id===cur),list=s.q[lvl],c=COL[lvl];
-  a.innerHTML=`<div class="row"><button class="ghost sm" id="back">Back</button><h2 class="sp">${esc(s.name)}</h2><button class="ghost sm" id="sy"></button></div>
-  <div class="tabs" style="--c:${c}">${LV.map(([k,l])=>`<button class="tab ${k===lvl?'on':''}" style="--c:${COL[k]}" data-l="${k}"><span class="dt">${DOT[k]}</span>${l} (${s.q[k].length})</button>`).join('')}</div>
-  <div style="--c:${c}">${list.length?list.map((q,i)=>`<div class="q"><div class="n">${i+1}.</div><div class="qb">${q.img?`<img src="${q.img}" alt="Handwritten question ${i+1}">`:`<p>${esc(q.text)}</p>`}<div class="d">Added ${fmt(q.ts)}</div></div><button class="ghost sm" data-rm="${q.id}" aria-label="Delete question ${i+1}">Delete</button></div>`).join(''):'<div class="empty">No questions here yet.</div>'}</div>
-  <button class="fab" id="add">+ Add question</button>`;
-  $('back').onclick=()=>{cur=null;render()};
+  const s=cs();
+  if(!curT){
+    const tps=[...s.topics].sort((x,y)=>x.ord-y.ord);
+    a.innerHTML=`<div class="row"><button class="ghost sm" id="back">Back</button><h2 class="sp">${esc(s.name)}</h2><button class="ghost sm" id="rs">Rename</button><button class="ghost sm" id="sy"></button></div>
+    <div class="row" style="margin-top:22px"><input type="text" id="nt" placeholder="New topic name" aria-label="New topic name"><button id="addT">Add topic</button></div>
+    <div>${tps.length?tps.map(t=>`<div class="subj" data-id="${t.id}"><div><b>${esc(t.name)}</b><br><small>${tabsOf(t).map(x=>esc(x.name)+' '+(t.q[x.id]||[]).length).join(' \u00B7 ')||'No tabs'}</small></div><div class="row"><button class="ghost sm" data-ren="${t.id}">Rename</button><button class="ghost sm" data-del="${t.id}">Delete</button></div></div>`).join(''):'<div class="empty">Add your first topic. Each topic has its own tabs and questions.</div>'}</div>`;
+    $('back').onclick=()=>{cur=null;render()};
+    $('sy').onclick=openSettings;
+    $('rs').onclick=()=>renameSubject(s.id);
+    $('addT').onclick=addTopic;
+    $('nt').onkeydown=e=>{if(e.key==='Enter')addTopic()};
+    a.querySelectorAll('.subj').forEach(el=>el.onclick=e=>{
+      if(e.target.dataset.ren){renameTopic(e.target.dataset.ren);return}
+      if(e.target.dataset.del){deleteTopic(e.target.dataset.del);return}
+      curT=el.dataset.id;render()});
+    updateStatus();
+    return;
+  }
+  const tp=ct(),tabs=tabsOf(tp);
+  if(!tabs.some(t=>t.id===lvl))lvl=tabs.length?tabs[0].id:null;
+  const tb=tabs.find(t=>t.id===lvl),list=tb?tp.q[tb.id]:[],c=tb?tcol(tb):'var(--hard)';
+  a.innerHTML=`<div class="row"><button class="ghost sm" id="back">Back</button><h2 class="sp">${esc(tp.name)}</h2><button class="ghost sm" id="rs">Rename</button><button class="ghost sm" id="sy"></button></div>
+  <p class="stl" style="margin:6px 0 0">${esc(s.name)}</p>
+  <div class="tabs" style="--c:${c}">${tabs.map(t=>`<button class="tab ${t.id===lvl?'on':''}" style="--c:${tcol(t)}" data-l="${t.id}">${DOT[t.id]?`<span class="dt">${DOT[t.id]}</span>`:''}${esc(t.name)} (${(tp.q[t.id]||[]).length})</button>`).join('')}<button class="tab add" id="at" aria-label="Add tab">+ Tab</button></div>
+  ${tb?`<div class="row" style="margin-bottom:6px"><button class="ghost sm" id="rt">Rename tab</button><button class="ghost sm" id="dtab">Delete tab</button></div>`:''}
+  <div style="--c:${c}">${list.length?list.map((q,i)=>`<div class="q"><div class="n">${i+1}.</div><div class="qb">${q.img?`<img src="${q.img}" alt="Handwritten question ${i+1}">`:`<p>${esc(q.text||'')}</p>`}<div class="d">Added ${fmt(q.ts)}${q.mod&&q.mod>q.ts+1000?' \u00B7 Edited '+fmt(q.mod):''}</div></div><div class="qa"><button class="ghost sm" data-ed="${q.id}" aria-label="Edit question ${i+1}">Edit</button><button class="ghost sm" data-rm="${q.id}" aria-label="Delete question ${i+1}">Delete</button></div></div>`).join(''):`<div class="empty">${tb?'No questions here yet.':'No tabs yet. Tap + Tab to add one.'}</div>`}</div>
+  ${tb?'<button class="fab" id="add">+ Add question</button>':''}`;
+  $('back').onclick=()=>{curT=null;render()};
   $('sy').onclick=openSettings;
-  a.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{lvl=b.dataset.l;render()});
-  a.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{if(confirm('Delete this question?')){S.tomb[b.dataset.rm]=Date.now();s.q[lvl]=s.q[lvl].filter(q=>q.id!==b.dataset.rm);save();render()}});
-  $('add').onclick=openAdd;
+  $('rs').onclick=()=>renameTopic(tp.id);
+  $('at').onclick=()=>addTab(tp);
+  a.querySelectorAll('.tab[data-l]').forEach(b=>b.onclick=()=>{lvl=b.dataset.l;render()});
+  if(tb){
+    $('rt').onclick=()=>renameTab(tp,tb);
+    $('dtab').onclick=()=>deleteTab(tp,tb);
+    $('add').onclick=()=>openAdd();
+    a.querySelectorAll('[data-ed]').forEach(b=>b.onclick=()=>openAdd(b.dataset.ed));
+    a.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{if(confirm('Delete this question?')){S.tomb[b.dataset.rm]=Date.now();tp.q[tb.id]=tp.q[tb.id].filter(q=>q.id!==b.dataset.rm);save();render()}});
+  }
   updateStatus();
 }
-function addSubject(){const v=$('ns').value.trim();if(!v)return;S.subjects.push({id:uid(),name:v,q:{easy:[],hard:[],hardest:[]}});save();render()}
+function addSubject(){const v=$('ns').value.trim();if(!v)return;S.subjects.push({id:uid(),name:v,mod:Date.now(),topics:[]});save();render()}
+function addTopic(){
+  const v=$('nt').value.trim();if(!v)return;
+  const s=cs();
+  s.topics.push(normTopic({id:uid(),name:v,ord:Math.max(-1,...s.topics.map(t=>t.ord))+1,mod:Date.now()}));
+  save();render();
+}
+function renameTopic(id){
+  const t=cs().topics.find(x=>x.id===id);if(!t)return;
+  const v=prompt('Rename topic',t.name);if(v===null)return;
+  const n=v.trim();if(!n||n===t.name)return;
+  t.name=n;t.mod=Date.now();save();render();
+}
+function deleteTopic(id){
+  const s=cs(),t=s.topics.find(x=>x.id===id);if(!t)return;
+  const n=Object.values(t.q).reduce((a,l)=>a+l.length,0);
+  if(!confirm('Delete the topic "'+t.name+'"'+(n?' and its '+n+' question'+(n>1?'s':''):'')+'?'))return;
+  S.tomb[id]=Date.now();
+  s.topics=s.topics.filter(x=>x.id!==id);
+  if(curT===id)curT=null;
+  save();render();
+}
+function renameSubject(id){
+  const s=S.subjects.find(x=>x.id===id);if(!s)return;
+  const v=prompt('Rename subject',s.name);if(v===null)return;
+  const n=v.trim();if(!n||n===s.name)return;
+  s.name=n;s.mod=Date.now();save();render();
+}
+function addTab(s){
+  const v=prompt('New tab name');if(v===null)return;
+  const n=v.trim();if(!n)return;
+  const id=uid();
+  s.tabs.push({id,name:n,ord:Math.max(-1,...s.tabs.map(t=>t.ord))+1,mod:Date.now()});
+  s.q[id]=[];lvl=id;save();render();
+}
+function renameTab(s,t){
+  const v=prompt('Rename tab',t.name);if(v===null)return;
+  const n=v.trim();if(!n||n===t.name)return;
+  t.name=n;t.mod=Date.now();save();render();
+}
+function deleteTab(s,t){
+  const list=s.q[t.id]||[];
+  if(!confirm('Delete the tab "'+t.name+'"'+(list.length?' and its '+list.length+' question'+(list.length>1?'s':''):'')+'?'))return;
+  const now=Date.now();
+  S.tomb[s.id+'/'+t.id]=now;list.forEach(q=>S.tomb[q.id]=now);
+  s.tabs=s.tabs.filter(x=>x.id!==t.id);delete s.q[t.id];
+  save();render();
+}
 function push(item){
-  const s=S.subjects.find(x=>x.id===cur);
-  if(!s){closeSheet();cur=null;render();return}
-  s.q[lvl].push({id:uid(),ts:Date.now(),...item});save();closeSheet();render();
+  const s=ct();
+  if(!s||!s.q[lvl]){closeSheet();fix();render();return}
+  const now=Date.now();
+  if(editing){
+    const q=s.q[lvl].find(x=>x.id===editing);
+    if(q){delete q.text;delete q.img;Object.assign(q,item,{mod:now})}
+  }else s.q[lvl].push({id:uid(),ts:now,mod:now,...item});
+  save();closeSheet();render();
 }
 
-/* ---------- add sheet ---------- */
+/* ---------- add / edit sheet ---------- */
 function closeSheet(){
+  editing=null;
   $('ov').classList.remove('on');$('sheet').innerHTML='';
-  if(pendingRender){pendingRender=false;if(cur&&!S.subjects.some(x=>x.id===cur))cur=null;renderKeep()}
+  if(pendingRender){pendingRender=false;fix();renderKeep()}
 }
-function openAdd(){
-  const L=LV.find(x=>x[0]===lvl)[1];
-  $('sheet').innerHTML=`<div class="row"><h2>Add ${L} question</h2><span class="sp"></span><button class="ghost sm" id="x">Cancel</button></div>
+function openAdd(qid){
+  const s=ct(),t=s.tabs.find(x=>x.id===lvl);
+  editing=qid||null;
+  const q=qid?s.q[lvl].find(x=>x.id===qid):null;
+  $('sheet').innerHTML=`<div class="row"><h2>${q?'Edit question':'Add to '+esc(t.name)}</h2><span class="sp"></span><button class="ghost sm" id="x">Cancel</button></div>
   <div class="row" style="margin:12px 0"><button id="mt" class="sp">Type</button><button id="mw" class="ghost sp">Write</button></div><div id="body"></div>`;
   $('ov').classList.add('on');
   $('x').onclick=closeSheet;
-  $('mt').onclick=typeMode;$('mw').onclick=writeMode;
-  typeMode();
+  $('mt').onclick=()=>typeMode();$('mw').onclick=()=>writeMode();
+  if(q&&q.img)writeMode(q.img);else typeMode(q&&q.text);
 }
 function mode(t){$('mt').className=t==='t'?'sp':'ghost sp';$('mw').className=t==='w'?'sp':'ghost sp'}
-function typeMode(){
+function typeMode(txt){
   mode('t');
   $('body').innerHTML=`<textarea id="tx" rows="6" placeholder="Type the question" aria-label="Question text"></textarea><div class="row" style="margin-top:10px"><span class="sp"></span><button id="sv">Save</button></div>`;
-  $('tx').focus();
+  $('tx').value=txt||'';$('tx').focus();
   $('sv').onclick=()=>{const t=$('tx').value.trim();if(t)push({text:t})};
 }
 
 /* ---------- handwriting canvas ---------- */
 let strokes=[],drawing=null,color='#111111',erase=false,w=3;
-function writeMode(){
-  mode('w');strokes=[];erase=false;color='#111111';
+function writeMode(base){
+  mode('w');strokes=[];erase=false;color='#111111';let bimg=null;
   $('body').innerHTML=`<canvas id="cv"></canvas>
   <div class="tools">
     ${['#111111','#6b6b6b','#b0b0b0'].map(c=>`<button class="sw ${c===color?'on':''}" style="background:${c}" data-c="${c}" aria-label="Pen color ${c}"></button>`).join('')}
@@ -311,7 +452,11 @@ function writeMode(){
     if(p.length===1){ctx.beginPath();ctx.arc(p[0][0]*d,p[0][1]*d,st.w*d*(st.e?4:.6),0,7);ctx.fill();return}
     for(let i=1;i<p.length;i++){ctx.lineWidth=(st.e?st.w*6:st.w*(.5+p[i][2]))*d;ctx.beginPath();ctx.moveTo(p[i-1][0]*d,p[i-1][1]*d);ctx.lineTo(p[i][0]*d,p[i][1]*d);ctx.stroke()}
   }
-  function redraw(){ctx.clearRect(0,0,cv.width,cv.height);strokes.forEach(seg)}
+  function redraw(){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    if(bimg){const d=devicePixelRatio||1,sc=Math.min(1,(cv.width-24*d)/bimg.width,(cv.height-24*d)/bimg.height);ctx.globalCompositeOperation='source-over';ctx.drawImage(bimg,12*d,12*d,bimg.width*sc,bimg.height*sc)}
+    strokes.forEach(seg);
+  }
   const pt=e=>{const r=cv.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top,e.pointerType==='pen'&&e.pressure?e.pressure:.5]};
   cv.onpointerdown=e=>{
     if(e.pointerType==='touch'&&$('po').checked)return;
@@ -326,7 +471,7 @@ function writeMode(){
   document.querySelectorAll('.sw').forEach(b=>b.onclick=()=>{color=b.dataset.c;erase=false;document.querySelectorAll('.sw').forEach(x=>x.classList.toggle('on',x===b));$('er').className='ghost sm'});
   $('er').onclick=()=>{erase=!erase;$('er').className=erase?'sm':'ghost sm'};
   $('un').onclick=()=>{strokes.pop();redraw()};
-  $('cl').onclick=()=>{strokes=[];redraw()};
+  $('cl').onclick=()=>{strokes=[];bimg=null;redraw()};
   $('sv').onclick=()=>{
     const W=cv.width,H=cv.height,px=ctx.getImageData(0,0,W,H).data;
     let x0=W,y0=H,x1=-1,y1=-1;
@@ -339,13 +484,14 @@ function writeMode(){
     oc.drawImage(cv,x0,y0,o.width,o.height,0,0,o.width,o.height);
     push({img:o.toDataURL('image/png')});
   };
+  if(base){const im=new Image();im.onload=()=>{bimg=im;redraw()};im.src=base}
   requestAnimationFrame(size);
   addEventListener('resize',size);
 }
 
 /* ---------- init ---------- */
 (async()=>{
-  try{const d=await load();if(d)S=d;S.tomb=S.tomb||{};CFG=(await kvGet('cfg'))||null}catch{}
+  try{const d=await load();if(d)S=d;normAll(S);CFG=(await kvGet('cfg'))||null}catch{}
   if(CFG&&CFG.last)st.t='Last synced '+fmt(CFG.last);
   render();
   if(CFG)sync();
