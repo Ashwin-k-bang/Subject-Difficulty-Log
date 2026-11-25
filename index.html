@@ -67,6 +67,11 @@ input[type=checkbox]{accent-color:var(--ink)}
 .tools label{font:13px var(--sans);color:var(--mute)}
 .sw{width:28px;height:28px;border-radius:50%;padding:0;border:1px solid var(--line)}
 .sw.on{box-shadow:0 0 0 2px var(--bg),0 0 0 3px var(--ink)}
+.tg{display:inline-block;font:11.5px var(--sans);letter-spacing:.04em;border:1px solid var(--line);border-radius:999px;padding:2px 10px;margin:8px 6px 0 0;color:var(--mute)}
+.chip{display:inline-flex;align-items:center;gap:8px;font:13.5px var(--sans);background:var(--card);border:1px solid var(--line);border-radius:999px;padding:6px 8px 6px 14px;margin:0 8px 8px 0}
+.chip span{cursor:pointer}
+.chip b{font-weight:400;cursor:pointer;color:var(--mute);padding:0 6px;font-size:16px;line-height:1}
+.chip b:hover{color:var(--ink)}
 @media(prefers-reduced-motion:no-preference){.sheet{animation:up .25s ease-out}@keyframes up{from{transform:translateY(30px);opacity:.5}}}
 </style>
 </head>
@@ -96,7 +101,7 @@ function normTopic(t){
   return t;
 }
 function norm(s){
-  s.mod=s.mod||0;
+  s.mod=s.mod||0;s.sources=s.sources||[];
   if(!s.topics)s.topics=(s.tabs||s.q)?[{id:'gen-'+s.id,name:'General',ord:0,mod:0,tabs:s.tabs,q:s.q}]:[];
   delete s.tabs;delete s.q;
   s.topics=s.topics.map(normTopic);
@@ -180,8 +185,14 @@ function merge(a,b){
   for(const s of [...(a.subjects||[]),...(b.subjects||[])]){
     if(tomb[s.id])continue;
     let m=map.get(s.id);
-    if(!m){m={id:s.id,name:s.name,mod:s.mod||0,topics:[]};map.set(s.id,m);out.push(m)}
+    if(!m){m={id:s.id,name:s.name,mod:s.mod||0,sources:[],topics:[]};map.set(s.id,m);out.push(m)}
     else if(newer(m,s)){m.name=s.name;m.mod=s.mod||0}
+    m.sources=m.sources||[];
+    for(const r of s.sources||[]){
+      if(tomb[r.id])continue;
+      const e=m.sources.find(x=>x.id===r.id);
+      if(!e)m.sources.push({...r});else if(newer(e,r))Object.assign(e,r);
+    }
     for(const t of s.topics||[]){
       if(tomb[t.id])continue;
       let p=m.topics.find(x=>x.id===t.id);
@@ -201,6 +212,7 @@ function merge(a,b){
 const byId=(x,y)=>x.id<y.id?-1:1;
 const canon=d=>JSON.stringify([
   [...(d.subjects||[])].sort(byId).map(s=>[s.id,s.name,s.mod||0,
+    [...(s.sources||[])].sort(byId).map(r=>[r.id,r.name,r.mod||0]),
     [...(s.topics||[])].sort(byId).map(p=>[p.id,p.name,p.ord||0,p.mod||0,
       [...(p.tabs||[])].sort(byId).map(t=>[t.id,t.name,t.ord,t.mod||0]),
       Object.keys(p.q||{}).sort().map(k=>[k,(p.q[k]||[]).map(q=>q.id+':'+(q.mod||0)).sort()])])]),
@@ -252,7 +264,7 @@ function afterSync(){
   fix();
   if($('ov').classList.contains('on'))pendingRender=true;else renderKeep();
 }
-function renderKeep(){const id=$('ns')?'ns':$('nt')?'nt':null,v=id?$(id).value:'';render();if(v&&id&&$(id))$(id).value=v}
+function renderKeep(){const ids=['ns','nt','nsr'],v=ids.map(i=>$(i)?$(i).value:'');render();ids.forEach((i,k)=>{if(v[k]&&$(i))$(i).value=v[k]})}
 
 function openSettings(){
   const c=CFG||{repo:'Ashwin-k-bang/Subject-Difficulty-Log',branch:'',path:'data/question-bank.json',token:''};
@@ -316,12 +328,17 @@ function render(){
     const tps=[...s.topics].sort((x,y)=>x.ord-y.ord);
     a.innerHTML=`<div class="row"><button class="ghost sm" id="back">Back</button><h2 class="sp">${esc(s.name)}</h2><button class="ghost sm" id="rs">Rename</button><button class="ghost sm" id="sy"></button></div>
     <div class="row" style="margin-top:22px"><input type="text" id="nt" placeholder="New topic name" aria-label="New topic name"><button id="addT">Add topic</button></div>
-    <div>${tps.length?tps.map(t=>`<div class="subj" data-id="${t.id}"><div><b>${esc(t.name)}</b><br><small>${tabsOf(t).map(x=>esc(x.name)+' '+(t.q[x.id]||[]).length).join(' \u00B7 ')||'No tabs'}</small></div><div class="row"><button class="ghost sm" data-ren="${t.id}">Rename</button><button class="ghost sm" data-del="${t.id}">Delete</button></div></div>`).join(''):'<div class="empty">Add your first topic. Each topic has its own tabs and questions.</div>'}</div>`;
+    <div style="margin-top:26px"><div class="f" style="margin:0 0 8px">Sources</div><div>${(s.sources||[]).length?[...s.sources].sort((x,y)=>x.name.localeCompare(y.name)).map(r=>`<span class="chip"><span data-sn="${r.id}" title="Rename">${esc(r.name)}</span><b data-sx="${r.id}" role="button" aria-label="Delete source ${esc(r.name)}">\u00D7</b></span>`).join(''):'<p class="help" style="margin:0 0 8px">Add sources (books, test series, previous papers). They show up as tag buttons whenever you add a question in this subject.</p>'}</div><div class="row" style="margin-top:6px"><input type="text" id="nsr" placeholder="New source name" aria-label="New source name"><button class="ghost" id="addSr">Add</button></div></div>
+    <div style="margin-top:22px">${tps.length?tps.map(t=>`<div class="subj" data-id="${t.id}"><div><b>${esc(t.name)}</b><br><small>${tabsOf(t).map(x=>esc(x.name)+' '+(t.q[x.id]||[]).length).join(' \u00B7 ')||'No tabs'}</small></div><div class="row"><button class="ghost sm" data-ren="${t.id}">Rename</button><button class="ghost sm" data-del="${t.id}">Delete</button></div></div>`).join(''):'<div class="empty">Add your first topic. Each topic has its own tabs and questions.</div>'}</div>`;
     $('back').onclick=()=>{cur=null;render()};
     $('sy').onclick=openSettings;
     $('rs').onclick=()=>renameSubject(s.id);
     $('addT').onclick=addTopic;
     $('nt').onkeydown=e=>{if(e.key==='Enter')addTopic()};
+    $('addSr').onclick=addSource;
+    $('nsr').onkeydown=e=>{if(e.key==='Enter')addSource()};
+    a.querySelectorAll('[data-sn]').forEach(b=>b.onclick=()=>renameSource(b.dataset.sn));
+    a.querySelectorAll('[data-sx]').forEach(b=>b.onclick=()=>deleteSource(b.dataset.sx));
     a.querySelectorAll('.subj').forEach(el=>el.onclick=e=>{
       if(e.target.dataset.ren){renameTopic(e.target.dataset.ren);return}
       if(e.target.dataset.del){deleteTopic(e.target.dataset.del);return}
@@ -336,7 +353,7 @@ function render(){
   <p class="stl" style="margin:6px 0 0">${esc(s.name)}</p>
   <div class="tabs" style="--c:${c}">${tabs.map(t=>`<button class="tab ${t.id===lvl?'on':''}" style="--c:${tcol(t)}" data-l="${t.id}">${DOT[t.id]?`<span class="dt">${DOT[t.id]}</span>`:''}${esc(t.name)} (${(tp.q[t.id]||[]).length})</button>`).join('')}<button class="tab add" id="at" aria-label="Add tab">+ Tab</button></div>
   ${tb?`<div class="row" style="margin-bottom:6px"><button class="ghost sm" id="rt">Rename tab</button><button class="ghost sm" id="dtab">Delete tab</button></div>`:''}
-  <div style="--c:${c}">${list.length?list.map((q,i)=>`<div class="q"><div class="n">${i+1}.</div><div class="qb">${q.img?`<img src="${q.img}" alt="Handwritten question ${i+1}">`:`<p>${esc(q.text||'')}</p>`}<div class="d">Added ${fmt(q.ts)}${q.mod&&q.mod>q.ts+1000?' \u00B7 Edited '+fmt(q.mod):''}</div></div><div class="qa"><button class="ghost sm" data-ed="${q.id}" aria-label="Edit question ${i+1}">Edit</button><button class="ghost sm" data-rm="${q.id}" aria-label="Delete question ${i+1}">Delete</button></div></div>`).join(''):`<div class="empty">${tb?'No questions here yet.':'No tabs yet. Tap + Tab to add one.'}</div>`}</div>
+  <div style="--c:${c}">${list.length?list.map((q,i)=>`<div class="q"><div class="n">${i+1}.</div><div class="qb">${q.img?`<img src="${q.img}" alt="Handwritten question ${i+1}">`:`<p>${esc(q.text||'')}</p>`}${(q.tags||[]).length?'<div>'+q.tags.map(t=>`<span class="tg">${esc(t)}</span>`).join('')+'</div>':''}<div class="d">Added ${fmt(q.ts)}${q.mod&&q.mod>q.ts+1000?' \u00B7 Edited '+fmt(q.mod):''}</div></div><div class="qa"><button class="ghost sm" data-ed="${q.id}" aria-label="Edit question ${i+1}">Edit</button><button class="ghost sm" data-rm="${q.id}" aria-label="Delete question ${i+1}">Delete</button></div></div>`).join(''):`<div class="empty">${tb?'No questions here yet.':'No tabs yet. Tap + Tab to add one.'}</div>`}</div>
   ${tb?'<button class="fab" id="add">+ Add question</button>':''}`;
   $('back').onclick=()=>{curT=null;render()};
   $('sy').onclick=openSettings;
@@ -353,6 +370,33 @@ function render(){
   updateStatus();
 }
 function addSubject(){const v=$('ns').value.trim();if(!v)return;S.subjects.push({id:uid(),name:v,mod:Date.now(),topics:[]});save();render()}
+const hasSrc=(s,n)=>(s.sources||[]).some(r=>r.name.toLowerCase()===n.toLowerCase());
+function addSource(){
+  const v=$('nsr').value.trim();if(!v)return;
+  const s=cs();
+  if(hasSrc(s,v)){alert('That source already exists.');return}
+  s.sources.push({id:uid(),name:v,mod:Date.now()});
+  save();render();
+}
+function renameSource(id){
+  const s=cs(),r=s.sources.find(x=>x.id===id);if(!r)return;
+  const v=prompt('Rename source (questions already tagged with it are updated too)',r.name);if(v===null)return;
+  const n=v.trim();if(!n||n===r.name)return;
+  if(hasSrc(s,n)&&n.toLowerCase()!==r.name.toLowerCase()){alert('That source already exists.');return}
+  const old=r.name,now=Date.now();
+  r.name=n;r.mod=now;
+  s.topics.forEach(t=>Object.values(t.q).forEach(l=>l.forEach(q=>{
+    if(q.tags&&q.tags.includes(old)){q.tags=q.tags.map(x=>x===old?n:x);q.mod=now}
+  })));
+  save();render();
+}
+function deleteSource(id){
+  const s=cs(),r=s.sources.find(x=>x.id===id);if(!r)return;
+  if(!confirm('Delete the source "'+r.name+'"? Questions already tagged with it keep their tag.'))return;
+  S.tomb[id]=Date.now();
+  s.sources=s.sources.filter(x=>x.id!==id);
+  save();render();
+}
 function addTopic(){
   const v=$('nt').value.trim();if(!v)return;
   const s=cs();
@@ -401,6 +445,7 @@ function deleteTab(s,t){
   save();render();
 }
 function push(item){
+  item={...item,tags:selTags.slice()};
   const s=ct();
   if(!s||!s.q[lvl]){closeSheet();fix();render();return}
   const now=Date.now();
@@ -417,13 +462,36 @@ function closeSheet(){
   $('ov').classList.remove('on');$('sheet').innerHTML='';
   if(pendingRender){pendingRender=false;fix();renderKeep()}
 }
+let selTags=[];
+function drawSrcs(){
+  const el=$('srcs');if(!el)return;
+  const names=(cs().sources||[]).map(r=>r.name).sort((x,y)=>x.localeCompare(y));
+  selTags.forEach(t=>{if(!names.includes(t))names.push(t)});
+  el.innerHTML=(names.length?'<label>Sources</label>':'')+names.map((n,i)=>`<button class="sm ${selTags.includes(n)?'':'ghost'}" data-i="${i}" aria-pressed="${selTags.includes(n)}">${esc(n)}</button>`).join('')+'<button class="ghost sm bad" id="nsrc">+ New source</button>';
+  el.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>{
+    const n=names[b.dataset.i],k=selTags.indexOf(n);
+    if(k<0)selTags.push(n);else selTags.splice(k,1);
+    drawSrcs();
+  });
+  $('nsrc').onclick=()=>{
+    const v=prompt('New source name');if(v===null)return;
+    const n=v.trim();if(!n)return;
+    const s=cs(),e=(s.sources||[]).find(r=>r.name.toLowerCase()===n.toLowerCase());
+    const name=e?e.name:n;
+    if(!e){s.sources.push({id:uid(),name:n,mod:Date.now()});save()}
+    if(!selTags.includes(name))selTags.push(name);
+    drawSrcs();
+  };
+}
 function openAdd(qid){
   const s=ct(),t=s.tabs.find(x=>x.id===lvl);
   editing=qid||null;
   const q=qid?s.q[lvl].find(x=>x.id===qid):null;
+  selTags=q&&q.tags?[...q.tags]:[];
   $('sheet').innerHTML=`<div class="row"><h2>${q?'Edit question':'Add to '+esc(t.name)}</h2><span class="sp"></span><button class="ghost sm" id="x">Cancel</button></div>
-  <div class="row" style="margin:12px 0"><button id="mt" class="sp">Type</button><button id="mw" class="ghost sp">Write</button></div><div id="body"></div>`;
+  <div class="row" style="margin:12px 0"><button id="mt" class="sp">Type</button><button id="mw" class="ghost sp">Write</button></div><div id="srcs" class="tools" style="margin:0 0 12px"></div><div id="body"></div>`;
   $('ov').classList.add('on');
+  drawSrcs();
   $('x').onclick=closeSheet;
   $('mt').onclick=()=>typeMode();$('mw').onclick=()=>writeMode();
   if(q&&q.img)writeMode(q.img);else typeMode(q&&q.text);
