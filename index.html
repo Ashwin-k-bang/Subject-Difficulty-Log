@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Question Bank</title>
+<style>
+:root{--bg:#f6f4ef;--card:#fff;--ink:#1d2a2a;--mute:#6b7776;--line:#dcd8cd;--acc:#1f5f5b;--easy:#3d8b5f;--hard:#c98a1a;--hardest:#b3392f}
+@media(prefers-color-scheme:dark){:root{--bg:#141a1a;--card:#1d2626;--ink:#e8efee;--mute:#8fa09e;--line:#2d3b3a;--acc:#5bb5ad}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 Georgia,"Iowan Old Style",serif;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+.wrap{max-width:760px;margin:0 auto;padding:16px}
+h1{font-size:28px;margin:8px 0 16px}
+h2{font-size:22px;margin:0}
+button,input,textarea{font:inherit;color:inherit}
+button{background:var(--acc);color:#fff;border:0;border-radius:10px;padding:10px 16px;cursor:pointer}
+button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button.sm{padding:6px 10px;font-size:14px}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+input[type=text],input[type=password],textarea{width:100%;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px}
+.row{display:flex;gap:8px;align-items:center}
+.sp{flex:1}
+.subj{display:flex;justify-content:space-between;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:8px 0;cursor:pointer}
+.subj small{color:var(--mute)}
+.tabs{display:flex;gap:6px;margin:14px 0;border-bottom:1px solid var(--line)}
+.tab{background:none;color:var(--mute);border-radius:0;border-bottom:3px solid transparent;padding:10px 14px}
+.tab.on{color:var(--ink);border-bottom-color:var(--c)}
+.q{display:flex;gap:12px;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--c);border-radius:10px;padding:12px;margin:10px 0}
+.n{font-weight:bold;min-width:2ch;color:var(--mute)}
+.qb{flex:1;min-width:0}
+.qb img{max-width:100%;background:#fff;border-radius:6px;display:block}
+.qb p{margin:0;white-space:pre-wrap;word-wrap:break-word}
+.d{color:var(--mute);font-size:13px;margin-top:6px}
+.stl{color:var(--mute);font-size:13px;margin:0 0 8px;min-height:1.5em}
+.stl.err{color:var(--hardest)}
+.f{display:block;margin:12px 0;font-size:14px;color:var(--mute)}
+.f input{margin-top:4px;color:var(--ink)}
+.help{font-size:14px;color:var(--mute);margin:8px 0}
+.empty{color:var(--mute);text-align:center;padding:32px 0}
+.fab{position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom));border-radius:28px;padding:14px 22px;box-shadow:0 4px 14px #0004}
+.ov{position:fixed;inset:0;background:#000a;display:none;z-index:9}
+.ov.on{display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--bg);width:100%;max-width:900px;border-radius:16px 16px 0 0;padding:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom));max-height:95vh;overflow:auto}
+#cv{width:100%;height:55vh;background:#fff;border:1px solid var(--line);border-radius:10px;touch-action:none;display:block}
+.tools{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;align-items:center}
+.tools label{font-size:14px;color:var(--mute)}
+.sw{width:28px;height:28px;border-radius:50%;padding:0;border:2px solid var(--line)}
+.sw.on{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc)}
+@media(prefers-reduced-motion:no-preference){.sheet{animation:up .2s}@keyframes up{from{transform:translateY(30px);opacity:.5}}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+
+<div class="ov" id="ov"><div class="sheet" id="sheet"></div></div>
+
+<script>
+const LV=[['easy','Easy'],['hard','Hard'],['hardest','Hardest']];
+const COL={easy:'var(--easy)',hard:'var(--hard)',hardest:'var(--hardest)'};
+let S={subjects:[],tomb:{}},cur=null,lvl='hard';
+
+/* ---------- storage (IndexedDB) ---------- */
+const idb=new Promise((res,rej)=>{const r=indexedDB.open('qbank',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=rej});
+async function kvGet(k){const db=await idb;return new Promise(r=>{const g=db.transaction('kv').objectStore('kv').get(k);g.onsuccess=()=>r(g.result)})}
+async function kvSet(k,v){const db=await idb;return new Promise(r=>{const t=db.transaction('kv','readwrite');t.objectStore('kv').put(v,k);t.oncomplete=()=>r()})}
+async function kvDel(k){const db=await idb;return new Promise(r=>{const t=db.transaction('kv','readwrite');t.objectStore('kv').delete(k);t.oncomplete=()=>r()})}
+const load=()=>kvGet('s');
+const saveLocal=()=>kvSet('s',S);
+function save(){saveLocal();schedulePush()}
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=t=>new Date(t).toLocaleString('en-IN',{day:'numeric',month:'short',year:'numeric',hour:'numeric',minute:'2-digit'});
+const $=id=>document.getElementById(id);
+
+/* ---------- GitHub sync ---------- */
+/* Config (repo, branch, path, token) is kept in its own IndexedDB key on this device only.
+   It is NOT part of "Export backup". Sync merges by id, so nothing is lost when two devices
+   edit at once; deletions are tracked in S.tomb so they propagate. */
+let CFG=null,syncing=false,again=false,pushT=null,pendingRender=false,st={t:'',err:false};
+
+function b64enc(str){const b=new TextEncoder().encode(str);let s='';for(let i=0;i<b.length;i+=0x8000)s+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000));return btoa(s)}
+function b64dec(b){const s=atob(b.replace(/\s/g,'')),u=new Uint8Array(s.length);for(let i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return new TextDecoder().decode(u)}
+
+function api(q,o={}){
+  const p=CFG.path.split('/').map(encodeURIComponent).join('/');
+  return fetch(`https://api.github.com/repos/${CFG.repo}/contents/${p}${q}`,{
+    cache:'no-store',method:o.method||'GET',body:o.body,
+    headers:{Authorization:'Bearer '+CFG.token,Accept:'application/vnd.github.object+json','X-GitHub-Api-Version':'2022-11-28',...(o.headers||{})}
+  });
+}
+async function ghErr(r){
+  let m='';try{m=(await r.json()).message||''}catch{}
+  const h={401:'GitHub rejected the token (wrong or expired).',403:'GitHub refused the request: '+m,404:'Not found. Check the repo name and branch, and that the token has access to this repo.'}[r.status];
+  return new Error(h||('GitHub error '+r.status+': '+m));
+}
+async function pull(){
+  const q='?ref='+encodeURIComponent(CFG.branch);
+  const r=await api(q);
+  if(r.status===404)return{sha:null,data:null};
+  if(!r.ok)throw await ghErr(r);
+  const j=await r.json();
+  let txt=j.content?b64dec(j.content):'';
+  if(!txt&&j.size>0){const r2=await api(q,{headers:{Accept:'application/vnd.github.raw+json'}});if(!r2.ok)throw await ghErr(r2);txt=await r2.text()}
+  let data=null;
+  if(txt.trim()){try{data=JSON.parse(txt)}catch{throw new Error('The file in the repo is not valid JSON.')}}
+  return{sha:j.sha,data};
+}
+function put(sha){
+  const body={message:'Sync question bank',content:b64enc(JSON.stringify(S)),branch:CFG.branch};
+  if(sha)body.sha=sha;
+  return api('',{method:'PUT',headers:{'Content-Type':'application/json',Accept:'application/vnd.github+json'},body:JSON.stringify(body)});
+}
+function merge(a,b){
+  const tomb={...(a.tomb||{})};
+  for(const k in (b.tomb||{}))tomb[k]=Math.max(tomb[k]||0,b.tomb[k]);
+  const out=[],map=new Map();
+  for(const s of [...(a.subjects||[]),...(b.subjects||[])]){
+    if(tomb[s.id])continue;
+    let m=map.get(s.id);
+    if(!m){m={id:s.id,name:s.name,q:{easy:[],hard:[],hardest:[]}};map.set(s.id,m);out.push(m)}
+    for(const [k] of LV){
+      const seen=new Set(m.q[k].map(q=>q.id));
+      for(const q of (s.q&&s.q[k])||[])if(!seen.has(q.id)&&!tomb[q.id]){seen.add(q.id);m.q[k].push(q)}
+    }
+  }
+  out.forEach(s=>LV.forEach(([k])=>s.q[k].sort((x,y)=>x.ts-y.ts)));
+  return{subjects:out,tomb};
+}
+const canon=d=>JSON.stringify([
+  [...(d.subjects||[])].sort((x,y)=>x.id<y.id?-1:1).map(s=>[s.id,s.name,LV.map(([k])=>((s.q&&s.q[k])||[]).map(q=>q.id).sort())]),
+  Object.keys(d.tomb||{}).sort()
+]);
+
+async function sync(){
+  if(!CFG)return;
+  if(syncing){again=true;return}
+  clearTimeout(pushT);syncing=true;updateStatus();
+  let changed=false;
+  try{
+    let ok=false;
+    for(let n=0;n<4&&!ok;n++){
+      const {sha,data}=await pull();
+      if(data&&!Array.isArray(data.subjects))throw new Error('The file in the repo is not a question bank backup.');
+      const merged=merge(S,data||{subjects:[],tomb:{}});
+      if(canon(merged)!==canon(S)){S=merged;changed=true;await saveLocal()}
+      if(data&&canon(data)===canon(S)){ok=true;break}
+      const r=await put(sha);
+      if(r.ok)ok=true;
+      else if(r.status!==409&&r.status!==422)throw await ghErr(r);
+    }
+    if(!ok)throw new Error('Sync kept conflicting. Try again in a moment.');
+    CFG.last=Date.now();await saveCfg();
+    setSt('Synced '+fmt(CFG.last));
+  }catch(e){
+    setSt(e.name==='TypeError'?'Can\u2019t reach GitHub. Will retry when you\u2019re online.':e.message,true);
+  }finally{
+    syncing=false;updateStatus();
+    if(changed)afterSync();
+    if(again){again=false;schedulePush()}
+  }
+}
+const saveCfg=()=>kvSet('cfg',CFG);
+function schedulePush(){if(!CFG)return;clearTimeout(pushT);pushT=setTimeout(sync,1500)}
+function setSt(t,err){st={t,err:!!err};updateStatus()}
+function updateStatus(){
+  const e=$('sm');
+  if(e){e.textContent=CFG?st.t:'Sync is off. Tap \u201cSet up sync\u201d to back up to GitHub.';e.className='stl'+(st.err?' err':'')}
+  const b=$('sy');
+  if(b)b.textContent=syncing?'Syncing\u2026':CFG?'Sync':'Set up sync';
+}
+function afterSync(){
+  if(cur&&!S.subjects.some(x=>x.id===cur))cur=null;
+  if($('ov').classList.contains('on'))pendingRender=true;else renderKeep();
+}
+function renderKeep(){const n=$('ns'),v=n?n.value:'';render();if(v&&$('ns'))$('ns').value=v}
+
+function openSettings(){
+  const c=CFG||{repo:'',branch:'main',path:'question-bank.json',token:''};
+  $('sheet').innerHTML=`<div class="row"><h2>GitHub sync</h2><span class="sp"></span><button class="ghost sm" id="x">Cancel</button></div>
+  <p class="help">Your bank is stored as one JSON file in a GitHub repo you own. Use a <b>private</b> repo and a fine-grained token limited to that repo with <b>Contents: Read and write</b>. The token is saved on this device only. Enter the same details on each device.</p>
+  <label class="f">Repository<input type="text" id="gr" placeholder="owner/repo" value="${esc(c.repo)}" autocapitalize="none" autocomplete="off" spellcheck="false"></label>
+  <label class="f">Branch<input type="text" id="gb" value="${esc(c.branch)}" autocapitalize="none" autocomplete="off" spellcheck="false"></label>
+  <label class="f">File path<input type="text" id="gp" value="${esc(c.path)}" autocapitalize="none" autocomplete="off" spellcheck="false"></label>
+  <label class="f">Access token<input type="password" id="gt" placeholder="${CFG?'Saved \u2014 leave blank to keep':'github_pat_\u2026'}" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+  <div class="row" style="margin-top:16px">${CFG?'<button class="ghost" id="dc">Disconnect</button>':''}<span class="sp"></span><button id="go">Save &amp; sync</button></div>`;
+  $('ov').classList.add('on');
+  $('x').onclick=closeSheet;
+  if($('dc'))$('dc').onclick=async()=>{
+    if(!confirm('Disconnect sync on this device? Your local questions and the GitHub file are kept.'))return;
+    CFG=null;clearTimeout(pushT);await kvDel('cfg');st={t:'',err:false};closeSheet();render();
+  };
+  $('go').onclick=async()=>{
+    let repo=$('gr').value.trim().replace(/^https?:\/\/github\.com\//i,'').replace(/\.git$/i,'').replace(/\/+$/,'');
+    const branch=$('gb').value.trim()||'main';
+    const path=($('gp').value.trim()||'question-bank.json').replace(/^\/+/,'');
+    const token=$('gt').value.trim()||(CFG&&CFG.token)||'';
+    if(!/^[\w.-]+\/[\w.-]+$/.test(repo)){alert('Enter the repository as owner/name.');return}
+    if(!token){alert('Paste your GitHub access token.');return}
+    CFG={repo,branch,path,token,last:CFG&&CFG.last};
+    await saveCfg();closeSheet();render();sync();
+  };
+}
+
+/* ---------- views ---------- */
+function render(){
+  const a=$('app');
+  if(!cur){
+    a.innerHTML=`<div class="row"><h1 class="sp">Question Bank</h1><button class="ghost sm" id="sy"></button></div>
+    <div class="stl" id="sm" role="status"></div>
+    <div class="row"><input type="text" id="ns" placeholder="New subject name" aria-label="New subject name"><button id="addS">Add subject</button></div>
+    <div id="sl">${S.subjects.length?S.subjects.map(s=>`<div class="subj" data-id="${s.id}"><div><b>${esc(s.name)}</b><br><small>${LV.map(([k,l])=>l+' '+s.q[k].length).join(' · ')}</small></div><button class="ghost sm" data-del="${s.id}">Delete</button></div>`).join(''):'<div class="empty">Add your first subject to start collecting questions.</div>'}</div>
+    <div class="row" style="margin-top:24px;flex-wrap:wrap"><button class="ghost sm" id="gs">Sync settings</button><button class="ghost sm" id="exp">Export backup</button><label class="ghost sm" style="border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:14px;cursor:pointer">Import backup<input type="file" id="imp" accept=".json" hidden></label></div>`;
+    $('addS').onclick=addSubject;
+    $('ns').onkeydown=e=>{if(e.key==='Enter')addSubject()};
+    $('sy').onclick=()=>CFG?sync():openSettings();
+    $('gs').onclick=openSettings;
+    a.querySelectorAll('.subj').forEach(el=>el.onclick=e=>{
+      if(e.target.dataset.del){if(confirm('Delete this subject and all its questions?')){S.tomb[e.target.dataset.del]=Date.now();S.subjects=S.subjects.filter(s=>s.id!==e.target.dataset.del);save();render()}return}
+      cur=el.dataset.id;render()});
+    $('exp').onclick=()=>{const b=new Blob([JSON.stringify(S)],{type:'application/json'});const u=document.createElement('a');u.href=URL.createObjectURL(b);u.download='question-bank-backup.json';u.click()};
+    $('imp').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(!Array.isArray(d.subjects))throw 0;d.tomb=d.tomb||{};S=d;await saveLocal();schedulePush();render()}catch{alert('That file is not a valid backup.')}};
+    updateStatus();
+    return;
+  }
+  const s=S.subjects.find(x=>x.id===cur),list=s.q[lvl],c=COL[lvl];
+  a.innerHTML=`<div class="row"><button class="ghost sm" id="back">Back</button><h2 class="sp">${esc(s.name)}</h2><button class="ghost sm" id="sy"></button></div>
+  <div class="stl" id="sm" role="status" style="margin-top:6px"></div>
+  <div class="tabs" style="--c:${c}">${LV.map(([k,l])=>`<button class="tab ${k===lvl?'on':''}" style="--c:${COL[k]}" data-l="${k}">${l} (${s.q[k].length})</button>`).join('')}</div>
+  <div style="--c:${c}">${list.length?list.map((q,i)=>`<div class="q"><div class="n">${i+1}.</div><div class="qb">${q.img?`<img src="${q.img}" alt="Handwritten question ${i+1}">`:`<p>${esc(q.text)}</p>`}<div class="d">Added ${fmt(q.ts)}</div></div><button class="ghost sm" data-rm="${q.id}" aria-label="Delete question ${i+1}">Delete</button></div>`).join(''):'<div class="empty">No questions here yet.</div>'}</div>
+  <button class="fab" id="add">+ Add question</button>`;
+  $('back').onclick=()=>{cur=null;render()};
+  $('sy').onclick=()=>CFG?sync():openSettings();
+  a.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{lvl=b.dataset.l;render()});
+  a.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{if(confirm('Delete this question?')){S.tomb[b.dataset.rm]=Date.now();s.q[lvl]=s.q[lvl].filter(q=>q.id!==b.dataset.rm);save();render()}});
+  $('add').onclick=openAdd;
+  updateStatus();
+}
+function addSubject(){const v=$('ns').value.trim();if(!v)return;S.subjects.push({id:uid(),name:v,q:{easy:[],hard:[],hardest:[]}});save();render()}
+function push(item){
+  const s=S.subjects.find(x=>x.id===cur);
+  if(!s){closeSheet();cur=null;render();return}
+  s.q[lvl].push({id:uid(),ts:Date.now(),...item});save();closeSheet();render();
+}
+
+/* ---------- add sheet ---------- */
+function closeSheet(){
+  $('ov').classList.remove('on');$('sheet').innerHTML='';
+  if(pendingRender){pendingRender=false;if(cur&&!S.subjects.some(x=>x.id===cur))cur=null;renderKeep()}
+}
+function openAdd(){
+  const L=LV.find(x=>x[0]===lvl)[1];
+  $('sheet').innerHTML=`<div class="row"><h2>Add ${L} question</h2><span class="sp"></span><button class="ghost sm" id="x">Cancel</button></div>
+  <div class="row" style="margin:12px 0"><button id="mt" class="sp">Type</button><button id="mw" class="ghost sp">Write</button></div><div id="body"></div>`;
+  $('ov').classList.add('on');
+  $('x').onclick=closeSheet;
+  $('mt').onclick=typeMode;$('mw').onclick=writeMode;
+  typeMode();
+}
+function mode(t){$('mt').className=t==='t'?'sp':'ghost sp';$('mw').className=t==='w'?'sp':'ghost sp'}
+function typeMode(){
+  mode('t');
+  $('body').innerHTML=`<textarea id="tx" rows="6" placeholder="Type the question" aria-label="Question text"></textarea><div class="row" style="margin-top:10px"><span class="sp"></span><button id="sv">Save</button></div>`;
+  $('tx').focus();
+  $('sv').onclick=()=>{const t=$('tx').value.trim();if(t)push({text:t})};
+}
+
+/* ---------- handwriting canvas ---------- */
+let strokes=[],drawing=null,color='#111111',erase=false,w=3;
+function writeMode(){
+  mode('w');strokes=[];erase=false;color='#111111';
+  $('body').innerHTML=`<canvas id="cv"></canvas>
+  <div class="tools">
+    ${['#111111','#1a4fd6','#c0262d'].map(c=>`<button class="sw ${c===color?'on':''}" style="background:${c}" data-c="${c}" aria-label="Pen color ${c}"></button>`).join('')}
+    <button class="ghost sm" id="er">Eraser</button>
+    <button class="ghost sm" id="un">Undo</button>
+    <button class="ghost sm" id="cl">Clear</button>
+    <label><input type="checkbox" id="po" checked> Pencil only (ignore finger)</label>
+    <span class="sp"></span><button id="sv">Save</button>
+  </div>`;
+  const cv=$('cv'),ctx=cv.getContext('2d');
+  const size=()=>{const r=cv.getBoundingClientRect(),d=devicePixelRatio||1;cv.width=r.width*d;cv.height=r.height*d;redraw()};
+  function seg(st){
+    const d=devicePixelRatio||1;
+    ctx.globalCompositeOperation=st.e?'destination-out':'source-over';
+    ctx.strokeStyle=st.c;ctx.fillStyle=st.c;ctx.lineCap=ctx.lineJoin='round';
+    const p=st.p;
+    if(p.length===1){ctx.beginPath();ctx.arc(p[0][0]*d,p[0][1]*d,st.w*d*(st.e?4:.6),0,7);ctx.fill();return}
+    for(let i=1;i<p.length;i++){ctx.lineWidth=(st.e?st.w*6:st.w*(.5+p[i][2]))*d;ctx.beginPath();ctx.moveTo(p[i-1][0]*d,p[i-1][1]*d);ctx.lineTo(p[i][0]*d,p[i][1]*d);ctx.stroke()}
+  }
+  function redraw(){ctx.clearRect(0,0,cv.width,cv.height);strokes.forEach(seg)}
+  const pt=e=>{const r=cv.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top,e.pointerType==='pen'&&e.pressure?e.pressure:.5]};
+  cv.onpointerdown=e=>{
+    if(e.pointerType==='touch'&&$('po').checked)return;
+    e.preventDefault();cv.setPointerCapture(e.pointerId);
+    drawing={c:color,w,e:erase,p:[pt(e)]};strokes.push(drawing);redraw();
+  };
+  cv.onpointermove=e=>{if(!drawing)return;e.preventDefault();
+    (e.getCoalescedEvents?e.getCoalescedEvents():[e]).forEach(ev=>drawing.p.push(pt(ev)));redraw()};
+  const end=()=>{drawing=null};
+  cv.onpointerup=cv.onpointercancel=end;
+  cv.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
+  document.querySelectorAll('.sw').forEach(b=>b.onclick=()=>{color=b.dataset.c;erase=false;document.querySelectorAll('.sw').forEach(x=>x.classList.toggle('on',x===b));$('er').className='ghost sm'});
+  $('er').onclick=()=>{erase=!erase;$('er').className=erase?'sm':'ghost sm'};
+  $('un').onclick=()=>{strokes.pop();redraw()};
+  $('cl').onclick=()=>{strokes=[];redraw()};
+  $('sv').onclick=()=>{
+    const W=cv.width,H=cv.height,px=ctx.getImageData(0,0,W,H).data;
+    let x0=W,y0=H,x1=-1,y1=-1;
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(px[(y*W+x)*4+3]>10){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}
+    if(x1<0){alert('Write something first.');return}
+    const pad=Math.round(12*(devicePixelRatio||1));
+    x0=Math.max(0,x0-pad);y0=Math.max(0,y0-pad);x1=Math.min(W-1,x1+pad);y1=Math.min(H-1,y1+pad);
+    const o=document.createElement('canvas');o.width=x1-x0+1;o.height=y1-y0+1;
+    const oc=o.getContext('2d');oc.fillStyle='#fff';oc.fillRect(0,0,o.width,o.height);
+    oc.drawImage(cv,x0,y0,o.width,o.height,0,0,o.width,o.height);
+    push({img:o.toDataURL('image/png')});
+  };
+  requestAnimationFrame(size);
+  addEventListener('resize',size);
+}
+
+/* ---------- init ---------- */
+(async()=>{
+  try{const d=await load();if(d)S=d;S.tomb=S.tomb||{};CFG=(await kvGet('cfg'))||null}catch{}
+  if(CFG&&CFG.last)st.t='Last synced '+fmt(CFG.last);
+  render();
+  if(CFG)sync();
+})();
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&CFG)sync()});
+addEventListener('online',()=>{if(CFG)sync()});
+if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
+</script>
+</body>
+</html>
